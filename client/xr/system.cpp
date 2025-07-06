@@ -105,6 +105,24 @@ XrSystemEyeGazeInteractionPropertiesEXT xr::system::eye_gaze_interaction_propert
 	return eye_gaze_prop;
 }
 
+XrSystemUserPresencePropertiesEXT xr::system::user_presence_properties() const
+{
+	if (!id)
+		throw std::invalid_argument("this");
+
+	XrSystemUserPresencePropertiesEXT presence_prop{
+	        .type = XR_TYPE_SYSTEM_USER_PRESENCE_PROPERTIES_EXT,
+	};
+
+	XrSystemProperties prop{
+	        .type = XR_TYPE_SYSTEM_PROPERTIES,
+	        .next = &presence_prop,
+	};
+	CHECK_XR(xrGetSystemProperties(*inst, id, &prop));
+
+	return presence_prop;
+}
+
 XrSystemFaceTrackingProperties2FB xr::system::fb_face_tracking2_properties() const
 {
 	if (!id)
@@ -139,6 +157,42 @@ XrSystemFacialTrackingPropertiesHTC xr::system::htc_face_tracking_properties() c
 	CHECK_XR(xrGetSystemProperties(*inst, id, &prop));
 
 	return face_tracking_prop;
+}
+
+XrSystemBodyTrackingPropertiesFB xr::system::fb_body_tracking_properties() const
+{
+	if (!id)
+		throw std::invalid_argument("this");
+
+	XrSystemBodyTrackingPropertiesFB body_tracking_prop{
+	        .type = XR_TYPE_SYSTEM_BODY_TRACKING_PROPERTIES_FB,
+	};
+
+	XrSystemProperties prop{
+	        .type = XR_TYPE_SYSTEM_PROPERTIES,
+	        .next = &body_tracking_prop,
+	};
+	CHECK_XR(xrGetSystemProperties(*inst, id, &prop));
+
+	return body_tracking_prop;
+}
+
+XrSystemBodyTrackingPropertiesBD xr::system::bd_body_tracking_properties() const
+{
+	if (!id)
+		throw std::invalid_argument("this");
+
+	XrSystemBodyTrackingPropertiesBD body_tracking_prop{
+	        .type = XR_TYPE_SYSTEM_BODY_TRACKING_PROPERTIES_BD,
+	};
+
+	XrSystemProperties prop{
+	        .type = XR_TYPE_SYSTEM_PROPERTIES,
+	        .next = &body_tracking_prop,
+	};
+	CHECK_XR(xrGetSystemProperties(*inst, id, &prop));
+
+	return body_tracking_prop;
 }
 
 xr::system::passthrough_type xr::system::passthrough_supported() const

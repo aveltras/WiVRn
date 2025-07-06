@@ -106,16 +106,47 @@ bool configuration::check_feature(feature f) const
 				{
 					case model::htc_vive_focus_3:
 					case model::htc_vive_focus_vision:
-						[[fallthrough]];
 					case model::htc_vive_xr_elite:
-						if (not(application::get_htc_face_tracking_eye_supported() or application::get_htc_face_tracking_lip_supported()))
+						if (not std::holds_alternative<xr::htc_face_tracker>(application::get_face_tracker()))
+							return false;
+						break;
+					case model::pico_4_pro:
+					case model::pico_4_enterprise:
+						if (not std::holds_alternative<xr::pico_face_tracker>(application::get_face_tracker()))
 							return false;
 						break;
 					default:
-						if (not application::get_fb_face_tracking2_supported())
+						if (not std::holds_alternative<xr::fb_face_tracker2>(application::get_face_tracker()))
 							return false;
 						break;
 				}
+				break;
+			case feature::body_tracking:
+				switch (guess_model())
+				{
+					case model::meta_quest_3:
+					case model::meta_quest_3s:
+						if (not std::holds_alternative<xr::fb_body_tracker>(application::get_body_tracker()))
+							return false;
+						break;
+					case model::htc_vive_focus_3:
+					case model::htc_vive_xr_elite:
+					case model::htc_vive_focus_vision:
+						if (not std::holds_alternative<xr::htc_body_tracker>(application::get_body_tracker()))
+							return false;
+						break;
+					case model::pico_neo_3:
+					case model::pico_4:
+					case model::pico_4s:
+					case model::pico_4_pro:
+					case model::pico_4_enterprise:
+						if (not std::holds_alternative<xr::pico_body_tracker>(application::get_body_tracker()))
+							return false;
+						break;
+					default:
+						break;
+				}
+				break;
 		}
 	}
 #ifdef __ANDROID__
@@ -197,6 +228,11 @@ configuration::configuration(xr::system & system)
 
 		if (auto val = root["mic_unprocessed_audio"]; val.is_bool())
 			mic_unprocessed_audio = val.get_bool();
+
+		if (auto val = root["fb_lower_body"]; val.is_bool())
+			fb_lower_body = val.get_bool();
+		if (auto val = root["fb_hip"]; val.is_bool())
+			fb_hip = val.get_bool();
 
 		if (auto val = root["virtual_keyboard_layout"]; val.is_string())
 			virtual_keyboard_layout = val.get_string().value();
@@ -320,6 +356,8 @@ void configuration::save()
 	write_openxr_post_processing(json, openxr_post_processing);
 	json << ",\"passthrough_enabled\":" << std::boolalpha << passthrough_enabled;
 	json << ",\"mic_unprocessed_audio\":" << std::boolalpha << mic_unprocessed_audio;
+	json << ",\"fb_lower_body\":" << std::boolalpha << fb_lower_body;
+	json << ",\"fb_hip\":" << std::boolalpha << fb_hip;
 	for (auto & [key, value]: features)
 		json << "," << key << ":" << std::boolalpha << value;
 	json << ",\"virtual_keyboard_layout\":" << json_string(virtual_keyboard_layout);

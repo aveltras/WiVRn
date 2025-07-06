@@ -21,9 +21,13 @@
 
 #include "configuration.h"
 #include "wifi_lock.h"
+#include "xr/fb_body_tracker.h"
 #include "xr/fb_face_tracker2.h"
 #include "xr/hand_tracker.h"
+#include "xr/htc_body_tracker.h"
 #include "xr/htc_face_tracker.h"
+#include "xr/pico_body_tracker.h"
+#include "xr/pico_face_tracker.h"
 #ifdef __ANDROID__
 #include <android_native_app_glue.h>
 #endif
@@ -125,13 +129,8 @@ class application : public singleton<application>
 	xr::hand_tracker left_hand;
 	xr::hand_tracker right_hand;
 
-	bool fb_face_tracking2_supported = false;
-	xr::fb_face_tracker2 fb_face_tracker2;
-
-	bool htc_face_tracking_eye_supported = false;
-	xr::htc_face_tracker htc_face_tracker_eye;
-	bool htc_face_tracking_lip_supported = false;
-	xr::htc_face_tracker htc_face_tracker_lip;
+	std::variant<std::monostate, xr::fb_face_tracker2, xr::htc_face_tracker, xr::pico_face_tracker> face_tracker;
+	std::variant<std::monostate, xr::fb_body_tracker, xr::htc_body_tracker, xr::pico_body_tracker> body_tracker;
 
 	bool eye_gaze_supported = false;
 
@@ -421,19 +420,14 @@ public:
 		return instance().hand_tracking_supported;
 	}
 
-	static bool get_fb_face_tracking2_supported()
+	static bool get_face_tracking_supported()
 	{
-		return instance().fb_face_tracking2_supported;
+		return !std::holds_alternative<std::monostate>(instance().face_tracker);
 	}
 
-	static bool get_htc_face_tracking_eye_supported()
+	static bool get_body_tracking_supported()
 	{
-		return instance().htc_face_tracking_eye_supported;
-	}
-
-	static bool get_htc_face_tracking_lip_supported()
-	{
-		return instance().htc_face_tracking_lip_supported;
+		return !std::holds_alternative<std::monostate>(instance().body_tracker);
 	}
 
 	static bool get_eye_gaze_supported()
@@ -456,19 +450,14 @@ public:
 		return instance().right_hand;
 	}
 
-	static xr::fb_face_tracker2 & get_fb_face_tracker2()
+	static auto & get_face_tracker()
 	{
-		return instance().fb_face_tracker2;
+		return instance().face_tracker;
 	}
 
-	static xr::htc_face_tracker & get_htc_face_tracker_eye()
+	static auto & get_body_tracker()
 	{
-		return instance().htc_face_tracker_eye;
-	}
-
-	static xr::htc_face_tracker & get_htc_face_tracker_lip()
-	{
-		return instance().htc_face_tracker_lip;
+		return instance().body_tracker;
 	}
 
 	static const std::vector<std::string> & get_xr_extensions()

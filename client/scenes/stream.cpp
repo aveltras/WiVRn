@@ -17,6 +17,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 #include "utils/overloaded.h"
+#include "xr/fb_body_tracker.h"
+#include "xr/fb_face_tracker2.h"
+#include "xr/htc_body_tracker.h"
+#include "xr/pico_body_tracker.h"
+#include <openxr/openxr.h>
 #define GLM_FORCE_RADIANS
 
 #include "stream.h"
@@ -216,10 +221,35 @@ std::shared_ptr<scenes::stream> scenes::stream::create(std::unique_ptr<wivrn_ses
 
 		if (config.check_feature(feature::face_tracking))
 		{
-			if (application::get_fb_face_tracking2_supported())
-				info.face_tracking = from_headset::face_type::fb2;
-			else if (application::get_htc_face_tracking_eye_supported() or application::get_htc_face_tracking_lip_supported())
-				info.face_tracking = from_headset::face_type::htc;
+			info.face_tracking = std::visit(utils::overloaded{
+			                                        [](std::monostate &) {
+				                                        return from_headset::face_type::none;
+			                                        },
+			                                        [](xr::fb_face_tracker2 &) {
+				                                        return from_headset::face_type::fb2;
+			                                        },
+			                                        [](xr::htc_face_tracker &) {
+				                                        return from_headset::face_type::htc;
+			                                        },
+			                                        [](xr::pico_face_tracker &) {
+				                                        return from_headset::face_type::fb2;
+			                                        },
+			                                },
+			                                application::get_face_tracker());
+		}
+
+		info.num_generic_trackers = 0;
+		if (config.check_feature(feature::body_tracking))
+		{
+			info.num_generic_trackers = std::visit(utils::overloaded{
+			                                               [&](std::monostate &) {
+				                                               return size_t(0);
+			                                               },
+			                                               [&](auto & b) {
+				                                               return b.count();
+			                                               },
+			                                       },
+			                                       application::get_body_tracker());
 		}
 
 		info.palm_pose = application::space(xr::spaces::palm_left) or application::space(xr::spaces::palm_right);
@@ -238,9 +268,16 @@ std::shared_ptr<scenes::stream> scenes::stream::create(std::unique_ptr<wivrn_ses
 	{
 		for (uint8_t view = 0; view < view_count; ++view)
 		{
-			self->network_session->send_control(from_headset::visibility_mask_changed{
-			        .data = get_visibility_mask(self->instance, self->session, view),
-			        .view_index = view});
+			try
+			{
+				self->network_session->send_control(from_headset::visibility_mask_changed{
+				        .data = get_visibility_mask(self->instance, self->session, view),
+				        .view_index = view});
+			}
+			catch (std::exception & e)
+			{
+				spdlog::warn("Failed to get visibility mask: ", e.what());
+			}
 		}
 	}
 
@@ -858,10 +895,16 @@ void scenes::stream::render(const XrFrameState & frame_state)
 	}
 
 	command_buffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *query_pool, 1);
-	reprojector->set_foveation(foveation);
 
-	// Unfoveate the image to the real pose
-	reprojector->reproject(command_buffer, image_index);
+	// defoveate the image
+	auto extents = reprojector->reproject(command_buffer, foveation, image_index);
+	for (size_t i = 0; i < view_count; ++i)
+	{
+		extents[i] = {
+		        .width = std::min(extents[i].width, swapchain.width()),
+		        .height = std::min(extents[i].height, swapchain.height()),
+		};
+	}
 
 	command_buffer.writeTimestamp(vk::PipelineStageFlagBits::eBottomOfPipe, *query_pool, 2);
 
@@ -906,10 +949,7 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		                        .swapchain = swapchain,
 		                        .imageRect = {
 		                                .offset = {0, 0},
-		                                .extent = {
-		                                        swapchain.width(),
-		                                        swapchain.height(),
-		                                },
+		                                .extent = extents[view],
 		                        },
 		                        .imageArrayIndex = view,
 		                },
@@ -1159,8 +1199,8 @@ void scenes::stream::setup_reprojection_swapchain()
 
 	const uint32_t video_width = video_stream_description->width / view_count;
 	const uint32_t video_height = video_stream_description->height;
-	uint32_t swapchain_width = video_width / video_stream_description->foveation[0].x.scale;
-	uint32_t swapchain_height = video_height / video_stream_description->foveation[0].y.scale;
+	uint32_t swapchain_width = video_stream_description->defoveated_width / view_count;
+	uint32_t swapchain_height = video_stream_description->defoveated_height;
 
 	const configuration::sgsr_settings sgsr = application::get_config().sgsr;
 	if (sgsr.enabled)
@@ -1187,7 +1227,15 @@ void scenes::stream::setup_reprojection_swapchain()
 	for (auto & image: swapchain.images())
 		swapchain_images.push_back(image.image);
 
-	reprojector.emplace(device, physical_device, decoder_out_image, 2, swapchain_images, extent, swapchain.format(), *video_stream_description);
+	reprojector.emplace(
+	        device,
+	        physical_device,
+	        decoder_out_image,
+	        vk::Extent2D{.width = video_width, .height = video_height},
+	        2,
+	        swapchain_images,
+	        extent,
+	        swapchain.format());
 }
 
 scene::meta & scenes::stream::get_meta_scene()
@@ -1200,35 +1248,25 @@ scene::meta & scenes::stream::get_meta_scene()
 	        },
 	        .bindings = {
 	                suggested_binding{
-	                        "/interaction_profiles/oculus/touch_controller",
+	                        {
+	                                "/interaction_profiles/oculus/touch_controller",
+	                                "/interaction_profiles/facebook/touch_controller_pro",
+	                                "/interaction_profiles/meta/touch_pro_controller",
+	                                "/interaction_profiles/meta/touch_controller_plus",
+	                                "/interaction_profiles/meta/touch_plus_controller",
+	                                "/interaction_profiles/bytedance/pico_neo3_controller",
+	                                "/interaction_profiles/bytedance/pico4_controller",
+	                                "/interaction_profiles/htc/vive_focus3_controller",
+	                        },
 	                        {
 	                                {"plots_toggle_1", "/user/hand/left/input/thumbstick/click"},
 	                                {"plots_toggle_2", "/user/hand/right/input/thumbstick/click"},
 	                        },
 	                },
 	                suggested_binding{
-	                        "/interaction_profiles/bytedance/pico_neo3_controller",
 	                        {
-	                                {"plots_toggle_1", "/user/hand/left/input/thumbstick/click"},
-	                                {"plots_toggle_2", "/user/hand/right/input/thumbstick/click"},
+	                                "/interaction_profiles/khr/simple_controller",
 	                        },
-	                },
-	                suggested_binding{
-	                        "/interaction_profiles/bytedance/pico4_controller",
-	                        {
-	                                {"plots_toggle_1", "/user/hand/left/input/thumbstick/click"},
-	                                {"plots_toggle_2", "/user/hand/right/input/thumbstick/click"},
-	                        },
-	                },
-	                suggested_binding{
-	                        "/interaction_profiles/htc/vive_focus3_controller",
-	                        {
-	                                {"plots_toggle_1", "/user/hand/left/input/thumbstick/click"},
-	                                {"plots_toggle_2", "/user/hand/right/input/thumbstick/click"},
-	                        },
-	                },
-	                suggested_binding{
-	                        "/interaction_profiles/khr/simple_controller",
 	                        {},
 	                },
 	        },
@@ -1255,6 +1293,16 @@ void scenes::stream::on_xr_event(const xr::event & event)
 			network_session->send_control(from_headset::visibility_mask_changed{
 			        .data = get_visibility_mask(instance, session, event.visibility_mask_changed.viewIndex),
 			        .view_index = uint8_t(event.visibility_mask_changed.viewIndex),
+			});
+			break;
+		case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED:
+			network_session->send_control(from_headset::session_state_changed{
+			        .state = event.state_changed.state,
+			});
+			break;
+		case XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT:
+			network_session->send_control(from_headset::user_presence_changed{
+			        .present = (bool)event.user_presence_changed.isUserPresent,
 			});
 			break;
 		case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED:

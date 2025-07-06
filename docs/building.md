@@ -41,7 +41,7 @@ Systemd service and pretty hostname support
 -DWIVRN_USE_SYSTEMD=ON
 ```
 
-Additionally, if your environment requires absolute paths inside the OpenXR runtime manifest, you can add `-DWIVRN_OPENXR_INSTALL_ABSOLUTE_RUNTIME_PATH=ON` to the build configuration.
+Additionally, if your environment requires absolute paths inside the OpenXR runtime manifest, you can add `-DWIVRN_OPENXR_MANIFEST_TYPE=absolute` to the build configuration.
 
 # Dashboard
 
@@ -60,7 +60,7 @@ See [Server](#server-pc) for the server compile options.
 # Client (headset)
 
 #### Build dependencies
-As Arch package names: git pkgconf glslang cmake jdk17-temurin librsvg cli11 ktx_software-git ([AUR](https://aur.archlinux.org/packages/ktx_software-git))
+As Arch package names: git pkgconf glslang cmake jdk17-openjdk librsvg cli11 ktx_software-git ([AUR](https://aur.archlinux.org/packages/ktx_software-git))
 
 OpenSSL build dependencies are also needed, as described [here](https://github.com/openssl/openssl/blob/master/INSTALL.md#prerequisites), in particular perl 5.
 
@@ -93,7 +93,7 @@ Once you have generated the keys, the apk will be automatically signed at build 
 From the main directory.
 ```bash
 export ANDROID_HOME=~/Android
-export JAVA_HOME=/usr/lib/jvm/java-17-temurin/
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk/
 
 ./gradlew assembleStandardRelease
 ```

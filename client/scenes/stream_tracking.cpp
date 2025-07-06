@@ -19,7 +19,10 @@
 
 #include "application.h"
 #include "stream.h"
+#include "utils/overloaded.h"
 #include "wivrn_packets.h"
+#include "xr/fb_body_tracker.h"
+#include <magic_enum.hpp>
 #include <ranges>
 #include <spdlog/spdlog.h>
 #include <thread>
@@ -33,46 +36,28 @@ using tid = to_headset::tracking_control::id;
 static const XrDuration min_tracking_period = 2'000'000;
 static const XrDuration max_tracking_period = 5'000'000;
 
-static from_headset::tracking::pose locate_space(device_id device, XrSpace space, XrSpace reference, XrTime time)
+static uint8_t cast_flags(XrSpaceLocationFlags location, XrSpaceVelocityFlags velocity)
 {
-	XrSpaceVelocity velocity{
-	        .type = XR_TYPE_SPACE_VELOCITY,
-	};
+	uint8_t flags = 0;
+	if (location & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
+		flags |= from_headset::tracking::orientation_valid;
 
-	XrSpaceLocation location{
-	        .type = XR_TYPE_SPACE_LOCATION,
-	        .next = &velocity,
-	};
+	if (location & XR_SPACE_LOCATION_POSITION_VALID_BIT)
+		flags |= from_headset::tracking::position_valid;
 
-	xrLocateSpace(space, reference, time, &location);
+	if (velocity & XR_SPACE_VELOCITY_LINEAR_VALID_BIT)
+		flags |= from_headset::tracking::linear_velocity_valid;
 
-	from_headset::tracking::pose res{
-	        .pose = location.pose,
-	        .linear_velocity = velocity.linearVelocity,
-	        .angular_velocity = velocity.angularVelocity,
-	        .device = device,
-	        .flags = 0,
-	};
+	if (velocity & XR_SPACE_VELOCITY_ANGULAR_VALID_BIT)
+		flags |= from_headset::tracking::angular_velocity_valid;
 
-	if (location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)
-		res.flags |= from_headset::tracking::orientation_valid;
+	if (location & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT)
+		flags |= from_headset::tracking::orientation_tracked;
 
-	if (location.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
-		res.flags |= from_headset::tracking::position_valid;
+	if (location & XR_SPACE_LOCATION_POSITION_TRACKED_BIT)
+		flags |= from_headset::tracking::position_tracked;
 
-	if (velocity.velocityFlags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT)
-		res.flags |= from_headset::tracking::linear_velocity_valid;
-
-	if (velocity.velocityFlags & XR_SPACE_VELOCITY_ANGULAR_VALID_BIT)
-		res.flags |= from_headset::tracking::angular_velocity_valid;
-
-	if (location.locationFlags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT)
-		res.flags |= from_headset::tracking::orientation_tracked;
-
-	if (location.locationFlags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT)
-		res.flags |= from_headset::tracking::position_tracked;
-
-	return res;
+	return flags;
 }
 
 namespace
@@ -90,6 +75,122 @@ public:
 		return instance.now() - start;
 	}
 };
+
+from_headset::tracking::pose locate_space(device_id device, XrSpace space, XrSpace reference, XrTime time)
+{
+	XrSpaceVelocity velocity{
+	        .type = XR_TYPE_SPACE_VELOCITY,
+	};
+
+	XrSpaceLocation location{
+	        .type = XR_TYPE_SPACE_LOCATION,
+	        .next = &velocity,
+	};
+
+	auto res = xrLocateSpace(space, reference, time, &location);
+
+	if (XR_SUCCEEDED(res))
+		return {
+		        .pose = location.pose,
+		        .linear_velocity = velocity.linearVelocity,
+		        .angular_velocity = velocity.angularVelocity,
+		        .device = device,
+		        .flags = cast_flags(location.locationFlags, velocity.velocityFlags),
+		};
+	spdlog::warn("xrLocateSpace failed for {}: {}", magic_enum::enum_name(device), xr::to_string(res));
+	return {};
+}
+
+class locate_spaces_functor
+{
+	std::vector<XrSpaceLocationData> locations;
+	std::vector<XrSpaceVelocityData> velocities;
+	std::vector<wivrn::device_id> devices;
+	std::vector<XrSpace> spaces;
+	XrSpace reference;
+	PFN_xrLocateSpaces locate_spaces = nullptr;
+
+public:
+	locate_spaces_functor(xr::instance & instance, XrSpace reference) :
+	        reference(reference)
+	{
+		try
+		{
+			if (instance.get_api_version() >= XR_MAKE_VERSION(1, 1, 0))
+				locate_spaces = instance.get_proc<PFN_xrLocateSpaces>("xrLocateSpaces");
+			else
+				locate_spaces = instance.get_proc<PFN_xrLocateSpacesKHR>("xrLocateSpacesKHR");
+		}
+		catch (std::exception & e)
+		{
+			spdlog::warn("Failed to load xrLocateSpaces function, fallback to xrLocateSpace");
+		}
+	}
+
+	void add_space(wivrn::device_id device, XrSpace space, XrTime t, std::vector<from_headset::tracking::pose> & out)
+	{
+		if (locate_spaces)
+		{
+			// store, will be located later
+			devices.push_back(device);
+			spaces.push_back(space);
+		}
+		else
+			out.push_back(locate_space(device, space, reference, t));
+	}
+
+	void resolve(
+	        xr::session & session,
+	        XrTime t,
+	        std::vector<from_headset::tracking::pose> & out)
+	{
+		assert(devices.size() == spaces.size());
+		if (locate_spaces)
+		{
+			locations.resize(spaces.size());
+			velocities.resize(spaces.size());
+			XrSpaceVelocities spc_velocities{
+			        .type = XR_TYPE_SPACE_VELOCITIES,
+			        .velocityCount = uint32_t(velocities.size()),
+			        .velocities = velocities.data(),
+			};
+			XrSpaceLocations spc_locations{
+			        .type = XR_TYPE_SPACE_LOCATIONS,
+			        .locationCount = uint32_t(locations.size()),
+			        .locations = locations.data(),
+			};
+			XrSpacesLocateInfo info{
+			        .type = XR_TYPE_SPACES_LOCATE_INFO,
+			        .baseSpace = reference,
+			        .time = t,
+			        .spaceCount = uint32_t(spaces.size()),
+			        .spaces = spaces.data(),
+			};
+			auto res = locate_spaces(session, &info, &spc_locations);
+			if (XR_SUCCEEDED(res))
+			{
+				for (size_t i = 0; i < devices.size(); ++i)
+				{
+					const auto & location = locations[i];
+					const auto & velocity = velocities[i];
+
+					out.push_back({
+					        .pose = location.pose,
+					        .linear_velocity = velocity.linearVelocity,
+					        .angular_velocity = velocity.angularVelocity,
+					        .device = devices[i],
+					        .flags = cast_flags(location.locationFlags, velocity.velocityFlags),
+					});
+				}
+			}
+			else
+				spdlog::warn("xrLocateSpaces failed: {}", xr::to_string(res));
+			devices.clear();
+			spaces.clear();
+		}
+	}
+};
+
 } // namespace
 
 static std::optional<std::array<from_headset::hand_tracking::pose, XR_HAND_JOINT_COUNT_EXT>> locate_hands(xr::hand_tracker & hand, XrSpace space, XrTime time)
@@ -232,23 +333,45 @@ void scenes::stream::tracking()
 
 	XrTime t0 = instance.now();
 	XrTime last_hand_sample = t0;
+	XrTime last_body_sample = t0;
 	std::vector<from_headset::tracking> tracking;
 	std::vector<from_headset::tracking> tracking_pool; // pre-allocated objects
 	std::vector<from_headset::hand_tracking> hands;
+	std::array<bool, 2> should_skip_simple_controllers{};
+	std::vector<from_headset::body_tracking> body;
 	std::vector<XrView> views;
 
 	std::vector<from_headset::trackings> merged_tracking;
 	std::vector<serialization_packet> packets;
 
 	const bool hand_tracking = config.check_feature(feature::hand_tracking);
-	from_headset::face_type face_tracking = from_headset::face_type::none;
-	if (config.check_feature(feature::face_tracking))
+
+	const bool face_tracking = config.check_feature(feature::face_tracking);
+	auto & face_tracker = application::get_face_tracker();
+	if (face_tracking)
 	{
-		if (application::get_fb_face_tracking2_supported())
-			face_tracking = from_headset::face_type::fb2;
-		else if (application::get_htc_face_tracking_eye_supported() or application::get_htc_face_tracking_lip_supported())
-			face_tracking = from_headset::face_type::htc;
+		// We can't start the face tracking on application initialisation like we do for
+		// other face trackers due to a Pico runtime bug where face tracking freezes when
+		// the headset is taken off or the application is quit.
+		if (auto * face_pico = std::get_if<xr::pico_face_tracker>(&face_tracker))
+			face_pico->start();
 	}
+
+	const bool body_tracking = config.check_feature(feature::body_tracking);
+	auto & body_tracker = application::get_body_tracker();
+	if (body_tracking)
+	{
+		if (auto * body_fb = std::get_if<xr::fb_body_tracker>(&body_tracker))
+		{
+			// TODO maybe handle reconnection better, if the settings are changed since
+			// last connection to running server, the tracker count will mismatch and
+			// stuff might break
+			body_fb->stop();
+			body_fb->start(config.fb_lower_body, config.fb_hip);
+		}
+	}
+
+	locate_spaces_functor locate_spaces{instance, world_space};
 
 	on_interaction_profile_changed({});
 
@@ -258,6 +381,7 @@ void scenes::stream::tracking()
 		{
 			tracking.clear();
 			hands.clear();
+			body.clear();
 
 			XrTime now = instance.now();
 			if (now < t0)
@@ -300,52 +424,70 @@ void scenes::stream::tracking()
 					if (recenter_requested.exchange(false))
 						packet.state_flags = wivrn::from_headset::tracking::recentered;
 
-					packet.device_poses.clear();
-					for (auto [device, space]: spaces)
-					{
-						if (enabled(control, device))
-							packet.device_poses.emplace_back(locate_space(device, space, world_space, t0 + Δt));
-					}
-
 					// Hand tracking data are very large, send fewer samples than other items
 					if (hand_tracking and t0 >= last_hand_sample + period and
 					    (Δt == 0 or Δt >= prediction - 2 * period))
 					{
 						last_hand_sample = t0;
 						if (control.enabled[size_t(tid::left_hand)])
+						{
+							auto joints = locate_hands(application::get_left_hand(), world_space, t0 + Δt);
 							hands.emplace_back(
 							        t0,
 							        t0 + Δt,
 							        from_headset::hand_tracking::left,
-							        locate_hands(application::get_left_hand(), world_space, t0 + Δt));
+							        joints);
+						}
 
 						if (control.enabled[size_t(tid::right_hand)])
+						{
+							auto joints = locate_hands(application::get_right_hand(), world_space, t0 + Δt);
 							hands.emplace_back(
 							        t0,
 							        t0 + Δt,
 							        from_headset::hand_tracking::right,
-							        locate_hands(application::get_right_hand(), world_space, t0 + Δt));
+							        joints);
+						}
 					}
 
-					if (control.enabled[size_t(tid::face)])
+					packet.device_poses.clear();
+					for (auto [device, space]: spaces)
 					{
-						switch (face_tracking)
-						{
-							case wivrn::from_headset::face_type::none:
-								break;
-							case wivrn::from_headset::face_type::fb2:
-								application::get_fb_face_tracker2().get_weights(t0 + Δt, packet.face.emplace());
-								break;
-							case wivrn::from_headset::face_type::htc:
-								auto & face_htc = packet.face_htc.emplace();
-								face_htc.eye_active = false;
-								face_htc.lip_active = false;
-								if (application::get_htc_face_tracking_eye_supported())
-									application::get_htc_face_tracker_eye().get_weights(t0 + Δt, face_htc);
-								if (application::get_htc_face_tracking_lip_supported())
-									application::get_htc_face_tracker_lip().get_weights(t0 + Δt, face_htc);
-								break;
-						}
+						if (enabled(control, device))
+							locate_spaces.add_space(device, space, t0 + Δt, packet.device_poses);
+					}
+					locate_spaces.resolve(session, t0 + Δt, packet.device_poses);
+
+					if (body_tracking)
+						std::visit(utils::overloaded{
+						                   [](std::monostate &) {},
+						                   [&](auto & b) {
+							                   if (t0 >= last_body_sample + period and
+							                       (Δt == 0 or Δt >= prediction - 2 * period))
+							                   {
+								                   last_body_sample = t0;
+								                   if (control.enabled[size_t(tid::generic_tracker)])
+								                   {
+									                   body.push_back(from_headset::body_tracking{
+									                           .production_timestamp = t0,
+									                           .timestamp = t0 + Δt,
+									                           .poses = b.locate_spaces(t0 + Δt, world_space),
+									                   });
+								                   }
+							                   }
+						                   },
+						           },
+						           body_tracker);
+
+					if (face_tracking && control.enabled[size_t(tid::face)])
+					{
+						std::visit(utils::overloaded{
+						                   [](std::monostate &) {},
+						                   [&](auto & ft) {
+							                   ft.get_weights(t0 + Δt, packet.face.emplace<typename std::remove_reference_t<decltype(ft)>::packet_type>());
+						                   },
+						           },
+						           face_tracker);
 					}
 				}
 				catch (const std::system_error & e)
@@ -396,7 +538,7 @@ void scenes::stream::tracking()
 				merged_tracking.back().items.emplace_back(std::move(item));
 			}
 
-			packets.resize(std::max(packets.size(), merged_tracking.size() + hands.size()));
+			packets.resize(std::max(packets.size(), merged_tracking.size() + hands.size() + body.size()));
 			size_t packet_count = 0;
 			for (const auto & i: merged_tracking)
 			{
@@ -407,6 +549,15 @@ void scenes::stream::tracking()
 			for (const auto & i: hands)
 			{
 				if (i.joints)
+				{
+					auto & packet = packets[packet_count++];
+					packet.clear();
+					wivrn_session::stream_socket_t::serialize(packet, i);
+				}
+			}
+			for (const auto & i: body)
+			{
+				if (i.poses)
 				{
 					auto & packet = packets[packet_count++];
 					packet.clear();
@@ -438,6 +589,9 @@ void scenes::stream::tracking()
 			exit();
 		}
 	}
+
+	if (auto * face_pico = std::get_if<xr::pico_face_tracker>(&face_tracker))
+		face_pico->stop();
 }
 
 void scenes::stream::operator()(to_headset::tracking_control && packet)
@@ -445,7 +599,7 @@ void scenes::stream::operator()(to_headset::tracking_control && packet)
 	std::lock_guard lock(tracking_control_mutex);
 	auto m = size_t(to_headset::tracking_control::id::microphone);
 	if (audio_handle)
-		audio_handle->set_mic_sate(packet.enabled[m]);
+		audio_handle->set_mic_state(packet.enabled[m]);
 
 	tracking_control = packet;
 	tracking_control.min_offset = std::min(tracking_control.min_offset, tracking_control.max_offset);

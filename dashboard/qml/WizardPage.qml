@@ -109,7 +109,7 @@ Kirigami.ScrollablePage {
     }
     Kirigami.Dialog {
         id: devmode_dialog
-        title: i18n("How to enable developper mode")
+        title: i18n("How to enable developer mode")
         showCloseButton: false
         padding: 2 * Kirigami.Units.largeSpacing
         ColumnLayout {
@@ -216,7 +216,7 @@ Kirigami.ScrollablePage {
             Controls.Label {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                text: i18n("<p>No headset detected. Make sure that:\n<ul><li>The ADB udev rules are installed</li><li>The headset is in <a href=\"#\">developper mode</a></li></ul></p>")
+                text: i18n("<p>No headset detected. Make sure that:\n<ul><li>The ADB udev rules are installed</li><li>The headset is in <a href=\"#\">developer mode</a></li></ul></p>")
                 onLinkActivated: devmode_dialog.open()
                 MouseArea {
                     anchors.fill: parent
@@ -291,6 +291,20 @@ Kirigami.ScrollablePage {
 
             SteamLaunchOptions {
                 Layout.topMargin: 2 * Kirigami.Units.largeSpacing
+            }
+
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.35
+                text: i18n("Important information")
+                Layout.topMargin: 2 * Kirigami.Units.largeSpacing
+            }
+
+            Controls.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: i18n("WiVRn entirely replaces SteamVR, you should not start SteamVR while WiVRn is running.")
             }
 
             Item {

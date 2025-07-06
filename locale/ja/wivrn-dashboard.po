@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: WiVRn-dashboard\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-05 23:41+0900\n"
+"POT-Creation-Date: 2025-06-20 01:44+0900\n"
 "PO-Revision-Date: 2025-04-10 07:14+0900\n"
 "Last-Translator: Mitsuami Megane <hello@mitsua.me>\n"
 "Language-Team: Japanese <>\n"
@@ -86,7 +86,7 @@ msgstr "ADBはインストールされていません。"
 
 #: dashboard/qml/ApkInstallPage.qml:47
 #, kde-format
-msgid "Connect a headset and make sure developper mode is enabled."
+msgid "Connect a headset and make sure developer mode is enabled."
 msgstr "HMDを接続し、開発モードを確認しましょう。"
 
 #: dashboard/qml/ApkInstallPage.qml:51 dashboard/qml/WizardPage.qml:204
@@ -172,7 +172,7 @@ msgstr "名前変更"
 
 #: dashboard/qml/HeadsetsPage.qml:55 dashboard/qml/WizardPage.qml:38
 #: dashboard/qml/WizardPage.qml:88 dashboard/qml/WizardPage.qml:263
-#: dashboard/qml/WizardPage.qml:312 dashboard/qml/WizardPage.qml:396
+#: dashboard/qml/WizardPage.qml:326 dashboard/qml/WizardPage.qml:410
 #, kde-format
 msgid "Cancel"
 msgstr "やめる"
@@ -287,7 +287,7 @@ msgstr "ペアリング"
 msgid "PIN: %1"
 msgstr "暗証番号：%1"
 
-#: dashboard/qml/Main.qml:238 dashboard/qml/WizardPage.qml:359
+#: dashboard/qml/Main.qml:238 dashboard/qml/WizardPage.qml:373
 #, kde-format
 msgid "Connect by USB"
 msgstr "USBで接続する"
@@ -310,7 +310,7 @@ msgstr "アプリ"
 
 #: dashboard/qml/Main.qml:295
 #, kde-format
-msgid "Steam informations"
+msgid "Steam information"
 msgstr "ストリーム情報"
 
 #: dashboard/qml/Main.qml:313
@@ -517,54 +517,72 @@ msgstr "H.265"
 msgid "AV1"
 msgstr "AV1"
 
-#: dashboard/qml/SettingsPage.qml:323
+#: dashboard/qml/SettingsPage.qml:319
+#, kde-format
+msgid "Advanced options"
+msgstr "詳細設定"
+
+#: dashboard/qml/SettingsPage.qml:325
+#, kde-format
+msgid "Enable debug window"
+msgstr "デバッグ・ウィンドウを表示する"
+
+#: dashboard/qml/SettingsPage.qml:332
+#, kde-format
+msgid "Enable SteamVR tracked devices support"
+msgstr "SteamVR・ライトハウス・トラッキング"
+
+#: dashboard/qml/SettingsPage.qml:335
+#, kde-format
+msgid ""
+"Allows the use of lighthouse-based controllers and trackers.\n"
+"Requires SteamVR to be installed.\n"
+"Devices must be be powered on before connecting to WiVRn.\n"
+"An external tool such as motoc is needed for calibration."
+msgstr ""
+"ライトハウスのコントローラーやトラッカーなどを使用します。\n"
+"SteamVRをインストールする必要があります。\n"
+"すべてのデバイスの電源が入ってからHMDを接続しましょう。\n"
+"キャリブレーションはmotocなどのソフトウェアで行います。"
+
+#: dashboard/qml/SettingsPage.qml:343
 #, kde-format
 msgid "Custom adb location"
 msgstr "特定なADBの場所"
 
-#: dashboard/qml/SettingsPage.qml:334
+#: dashboard/qml/SettingsPage.qml:354
 #, kde-format
 msgid "Adb location:"
 msgstr "ADBの場所："
 
-#: dashboard/qml/SettingsPage.qml:343
+#: dashboard/qml/SettingsPage.qml:363
 #, kde-format
 msgctxt "browse a file to choose the adb binary"
 msgid "Browse"
 msgstr "検索する"
 
-#: dashboard/qml/SettingsPage.qml:353
+#: dashboard/qml/SettingsPage.qml:373
 #, kde-format
 msgid "Default"
 msgstr "デフォルト"
 
-#: dashboard/qml/SettingsPage.qml:360
-#, kde-format
-msgid "xrizer"
-msgstr "xrizer"
-
-#: dashboard/qml/SettingsPage.qml:365
-#, kde-format
-msgid "Open Composite"
-msgstr "OpenComposite"
-
-#: dashboard/qml/SettingsPage.qml:372
+#: dashboard/qml/SettingsPage.qml:387
 #, kde-format
 msgctxt "set a custom OpenVR compatibility library"
 msgid "Custom"
 msgstr "カスタム"
 
-#: dashboard/qml/SettingsPage.qml:377
+#: dashboard/qml/SettingsPage.qml:392
 #, kde-format
 msgid "Disabled"
 msgstr "無し"
 
-#: dashboard/qml/SettingsPage.qml:385
+#: dashboard/qml/SettingsPage.qml:400
 #, kde-format
 msgid "OpenVR compatibility library:"
 msgstr "OpenVR実装ライブラリー"
 
-#: dashboard/qml/SettingsPage.qml:411
+#: dashboard/qml/SettingsPage.qml:426
 #, kde-format
 msgid "Library path, excluding bin/linux64/vrclient.so"
 msgstr "ライブラリーの場所（bin/linux64/vrclient.so 無し）"
@@ -599,7 +617,7 @@ msgstr "Steam用の起動オプションをコピーしました"
 msgid "I cannot find the WiVRn app on my headset"
 msgstr "HMDでWiVRnアプリが見つからない"
 
-#: dashboard/qml/TroubleshootPage.qml:21 dashboard/qml/WizardPage.qml:373
+#: dashboard/qml/TroubleshootPage.qml:21 dashboard/qml/WizardPage.qml:387
 #, kde-format
 msgid ""
 "If you installed WiVRn over USB on a Meta headset, the app is in the "
@@ -611,7 +629,7 @@ msgstr "Metaの場合、ライブラリの「提供元不明」タブをご覧�
 msgid "I cannot see my computer in the WiVRn app"
 msgstr "WiVRnアプリでパソコンが表示されない"
 
-#: dashboard/qml/TroubleshootPage.qml:25 dashboard/qml/WizardPage.qml:378
+#: dashboard/qml/TroubleshootPage.qml:25 dashboard/qml/WizardPage.qml:392
 #, kde-format
 msgid ""
 "If the server is not visible or the connection fails, check that port 5353 "
@@ -665,7 +683,7 @@ msgstr "ペアリングは無効です。"
 msgid "I have no sound on my headset"
 msgstr "HMDから音が出ない"
 
-#: dashboard/qml/TroubleshootPage.qml:50 dashboard/qml/WizardPage.qml:426
+#: dashboard/qml/TroubleshootPage.qml:50 dashboard/qml/WizardPage.qml:440
 #, kde-format
 msgid ""
 "When the headset is connected, select \"WiVRn\" as the default audio output "
@@ -689,9 +707,9 @@ msgid "Getting started"
 msgstr "はじめに"
 
 #: dashboard/qml/WizardPage.qml:29 dashboard/qml/WizardPage.qml:78
-#: dashboard/qml/WizardPage.qml:253 dashboard/qml/WizardPage.qml:302
-#: dashboard/qml/WizardPage.qml:386 dashboard/qml/WizardPage.qml:433
-#: dashboard/qml/WizardPage.qml:470
+#: dashboard/qml/WizardPage.qml:253 dashboard/qml/WizardPage.qml:316
+#: dashboard/qml/WizardPage.qml:400 dashboard/qml/WizardPage.qml:447
+#: dashboard/qml/WizardPage.qml:484
 #, kde-format
 msgid "Back"
 msgstr "戻る"
@@ -711,15 +729,15 @@ msgstr ""
 "るようにご案内します。"
 
 #: dashboard/qml/WizardPage.qml:83 dashboard/qml/WizardPage.qml:258
-#: dashboard/qml/WizardPage.qml:307 dashboard/qml/WizardPage.qml:438
-#: dashboard/qml/WizardPage.qml:475
+#: dashboard/qml/WizardPage.qml:321 dashboard/qml/WizardPage.qml:452
+#: dashboard/qml/WizardPage.qml:489
 #, kde-format
 msgid "Next"
 msgstr "次"
 
 #: dashboard/qml/WizardPage.qml:112
 #, kde-format
-msgid "How to enable developper mode"
+msgid "How to enable developer mode"
 msgstr "HMDの開発者モードを有効する方法"
 
 #: dashboard/qml/WizardPage.qml:119
@@ -735,7 +753,7 @@ msgid ""
 "You can either install it from the Meta store or directly over USB."
 msgstr ""
 "WiVRnを使用するには、HMDにアプリをインストール必要があります。\n"
-"Metaストアからインストールするとも、USBで直接インストールすることもできます。"
+"Metaストアからインストールや、USBで直接インストールすることもできます。"
 
 #: dashboard/qml/WizardPage.qml:148
 #, kde-format
@@ -789,7 +807,7 @@ msgstr "ADBはインストールされていません"
 msgid ""
 "<p>No headset detected. Make sure that:\n"
 "<ul><li>The ADB udev rules are installed</li><li>The headset is in <a "
-"href=\"#\">developper mode</a></li></ul></p>"
+"href=\"#\">developer mode</a></li></ul></p>"
 msgstr ""
 "<p>HMDは見つかりません。以下を確認しましょう：\n"
 "<ul><li>ADB用のudevルールはインストールされています</li><li>HMDは<a "
@@ -807,12 +825,24 @@ msgid ""
 "your headset."
 msgstr "接続すると、選択したアプリが自動的に起動します。"
 
-#: dashboard/qml/WizardPage.qml:344
+#: dashboard/qml/WizardPage.qml:300
+#, kde-format
+msgid "Important information"
+msgstr "警告"
+
+#: dashboard/qml/WizardPage.qml:307
+#, kde-format
+msgid ""
+"WiVRn entirely replaces SteamVR, you should not start SteamVR while WiVRn is "
+"running."
+msgstr "WiVRnはSteamVRの変わりに使うものです。両方を同時に走らせないように気をつけましょう。"
+
+#: dashboard/qml/WizardPage.qml:358
 #, kde-format
 msgid "Start the WiVRn app on your headset"
 msgstr "HMDでWiVRnアプリを起動しましょう。"
 
-#: dashboard/qml/WizardPage.qml:349
+#: dashboard/qml/WizardPage.qml:363
 #, kde-format
 msgid ""
 "To connect over WiFi, start the WiVRn app on your headset, connect to \"%1\" "
@@ -821,44 +851,54 @@ msgstr ""
 "WiFiで接続するには、HMDのWiVRnアプリを使い、「%1」に接続し、暗証番号に「%2」"
 "を入れましょう。"
 
-#: dashboard/qml/WizardPage.qml:356
+#: dashboard/qml/WizardPage.qml:370
 #, kde-format
 msgid "To connect over USB, click on \"Connect by USB\"."
 msgstr "USBで接続するには、「USBで接続する」ボタンをクリックしましょう。"
 
-#: dashboard/qml/WizardPage.qml:369
+#: dashboard/qml/WizardPage.qml:383
 #, kde-format
 msgid "Troubleshooting"
 msgstr "問題解決"
 
-#: dashboard/qml/WizardPage.qml:391
+#: dashboard/qml/WizardPage.qml:405
 #, kde-format
 msgid "Skip"
 msgstr "スキップ"
 
-#: dashboard/qml/WizardPage.qml:411
+#: dashboard/qml/WizardPage.qml:425
 #, kde-format
 msgid "Connection established"
 msgstr "接続確立"
 
-#: dashboard/qml/WizardPage.qml:416
+#: dashboard/qml/WizardPage.qml:430
 #, kde-format
 msgid "Your headset is now connected."
 msgstr "HMDに接続しました。"
 
-#: dashboard/qml/WizardPage.qml:421 dashboard/qml/WizardPage.qml:463
+#: dashboard/qml/WizardPage.qml:435 dashboard/qml/WizardPage.qml:477
 #, kde-format
 msgid ""
 "To connect another headset, make sure pairing is enabled in the dashboard "
 "before connecting."
 msgstr "他のHMDを接続するには、ペアリングが有効なのかどうか確認しましょう。"
 
-#: dashboard/qml/WizardPage.qml:443 dashboard/qml/WizardPage.qml:480
+#: dashboard/qml/WizardPage.qml:457 dashboard/qml/WizardPage.qml:494
 #, kde-format
 msgid "Finish"
 msgstr "完了"
 
-#: dashboard/qml/WizardPage.qml:458
+#: dashboard/qml/WizardPage.qml:472
 #, kde-format
 msgid "Finished"
 msgstr "完了しました"
+
+#: dashboard/wivrn_server.cpp:584
+#, kde-format
+msgid "xrizer"
+msgstr "xrizer"
+
+#: dashboard/wivrn_server.cpp:585
+#, kde-format
+msgid "Open Composite"
+msgstr "OpenComposite"

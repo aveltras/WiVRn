@@ -32,6 +32,7 @@
 #include "lobby.h"
 #include "stream.h"
 #include "utils/i18n.h"
+#include "utils/overloaded.h"
 #include "version.h"
 #include <cassert>
 #include <chrono>
@@ -727,7 +728,7 @@ void scenes::lobby::gui_settings()
 		ImGui::EndDisabled();
 	}
 	{
-		ImGui::BeginDisabled(not(application::get_fb_face_tracking2_supported() or application::get_htc_face_tracking_eye_supported() or application::get_htc_face_tracking_lip_supported()));
+		ImGui::BeginDisabled(not application::get_face_tracking_supported());
 		bool enabled = config.check_feature(feature::face_tracking);
 		if (ImGui::Checkbox(_S("Enable face tracking"), &enabled))
 		{
@@ -738,6 +739,61 @@ void scenes::lobby::gui_settings()
 		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled) and (ImGui::GetItemFlags() & ImGuiItemFlags_Disabled))
 			tooltip(_("This feature is not supported by your headset"));
 		vibrate_on_hover();
+	}
+
+	{
+		ImGui::BeginDisabled(not application::get_body_tracking_supported());
+		bool enabled = config.check_feature(feature::body_tracking);
+		if (ImGui::Checkbox(_S("Enable body tracking"), &enabled))
+		{
+			config.set_feature(feature::body_tracking, enabled);
+			config.save();
+		}
+		ImGui::EndDisabled();
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		{
+			if (ImGui::GetItemFlags() & ImGuiItemFlags_Disabled)
+			{
+				tooltip(_("This feature is not supported by your headset"));
+			}
+			else
+			{
+				std::visit(utils::overloaded{
+				                   [](auto &) {},
+				                   [this](xr::fb_body_tracker &) {
+					                   tooltip(_("Requires 'Hand and body tracking' to be enabled in the Quest movement tracking settings,\notherwise body data will be guessed from controller and headset positions"));
+				                   },
+				           },
+				           application::get_body_tracker());
+			}
+		}
+
+		vibrate_on_hover();
+	}
+	if (std::holds_alternative<xr::fb_body_tracker>(application::get_body_tracker()))
+	{
+		ImGui::BeginDisabled(not config.check_feature(feature::body_tracking));
+		ImGui::Indent();
+		if (ImGui::Checkbox(_S("Enable lower body tracking"), &config.fb_lower_body))
+		{
+			config.save();
+		}
+		vibrate_on_hover();
+		if (ImGui::IsItemHovered())
+			tooltip(_("Estimate lower body joint positions using Generative Legs\nRequires 'Hand and body tracking' to be enabled in the Quest movement tracking settings"));
+
+		ImGui::BeginDisabled(not config.fb_lower_body);
+		if (ImGui::Checkbox(_S("Enable hip tracking"), &config.fb_hip))
+		{
+			config.save();
+		}
+		vibrate_on_hover();
+		if (ImGui::IsItemHovered())
+			tooltip(_("Only takes affect with lower body tracking enabled\nMay be desired when using another source of hip tracking"));
+		ImGui::EndDisabled();
+
+		ImGui::Unindent();
+		ImGui::EndDisabled();
 	}
 
 	ImGui::BeginDisabled(passthrough_supported == xr::system::passthrough_type::no_passthrough);
@@ -1344,7 +1400,7 @@ static const char * get_face_icon(XrTime predicted_display_time)
 {
 	static const auto w = face_weights();
 	wivrn::from_headset::tracking::fb_face2 expression;
-	application::get_fb_face_tracker2().get_weights(predicted_display_time, expression);
+	std::get<xr::fb_face_tracker2>(application::get_face_tracker()).get_weights(predicted_display_time, expression);
 
 	if (not expression.is_valid)
 		return ICON_FA_FACE_MEH;
@@ -1408,25 +1464,27 @@ void scenes::lobby::draw_features_status(XrTime predicted_display_time)
 		});
 	}
 
-	if (application::get_fb_face_tracking2_supported())
+	if (application::get_face_tracking_supported())
 	{
+		const char * icon_enabled = std::holds_alternative<xr::fb_face_tracker2>(application::get_face_tracker())
+		                                    ? get_face_icon(predicted_display_time)
+		                                    : ICON_FA_FACE_KISS_WINK_HEART;
 		items.push_back({
 		        .f = feature::face_tracking,
 		        .tooltip_enabled = _("Face tracking is enabled"),
 		        .tooltip_disabled = _("Face tracking is disabled"),
-		        .icon_enabled = get_face_icon(predicted_display_time),
+		        .icon_enabled = icon_enabled,
 		        .icon_disabled = ICON_FA_FACE_MEH_BLANK,
 		});
 	}
 
-	if (application::get_htc_face_tracking_eye_supported() or application::get_htc_face_tracking_lip_supported())
+	if (application::get_body_tracking_supported())
 	{
 		items.push_back({
-		        .f = feature::face_tracking,
-		        .tooltip_enabled = _("Face tracking is enabled"),
-		        .tooltip_disabled = _("Face tracking is disabled"),
-		        .icon_enabled = ICON_FA_FACE_KISS_WINK_HEART,
-		        .icon_disabled = ICON_FA_FACE_MEH_BLANK,
+		        .f = feature::body_tracking,
+		        .tooltip_enabled = _("Body tracking is enabled"),
+		        .tooltip_disabled = _("Body tracking is disabled"),
+		        .icon_enabled = ICON_FA_PERSON,
 		});
 	}
 
@@ -1456,7 +1514,7 @@ void scenes::lobby::draw_features_status(XrTime predicted_display_time)
 		if (&i != &items.front())
 			ImGui::SameLine();
 		auto pos = ImGui::GetCursorPos();
-		if (ImGui::Button(i.enabled ? i.icon_enabled : i.icon_disabled))
+		if (ImGui::Button(fmt::format("{}##{}", i.enabled ? i.icon_enabled : i.icon_disabled, i.icon_enabled).c_str()))
 		{
 			// button doesn't alter the bool
 			config.set_feature(i.f, not i.enabled);

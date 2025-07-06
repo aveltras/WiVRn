@@ -49,6 +49,7 @@
 #include <glib.h>
 #include <libnotify/notify.h>
 
+#include <server/ipc_server_interface.h>
 #include <shared/ipc_protocol.h>
 #include <util/u_file.h>
 
@@ -57,9 +58,6 @@ U_TRACE_TARGET_SETUP(U_TRACE_WHICH_SERVICE)
 
 extern "C"
 {
-	int
-	ipc_server_main(int argc, char * argv[]);
-
 	int listen_socket = -1;
 }
 
@@ -248,7 +246,7 @@ void start_app()
 
 	assert(app_watch == 0);
 	assert(app_kill_watch == 0);
-	if (app_pid)
+	if (app_pid > 0)
 	{
 		app_watch = g_child_watch_add(app_pid, [](pid_t, int status, void *) {
 			display_child_status(status, "Application");
@@ -264,10 +262,12 @@ void start_app()
 	else
 	{
 		app_watch = 0;
+		if (app_pid < 0)
+			throw std::system_error(-app_pid, std::system_category());
 	}
 }
 
-void start_server()
+void start_server(configuration config)
 {
 	server_pid = do_fork ? fork() : 0;
 
@@ -286,21 +286,28 @@ void start_server()
 			close(stdin_pipe_fds[1]);
 		}
 
-		// In most cases there is no server-side reprojection and
-		// there is no need for oversampling.
-		setenv("XRT_COMPOSITOR_SCALE_PERCENTAGE", "100", false);
-
-		// Enable mipmaps for distortion
-		setenv("XRT_DISTORTION_MIP_LEVELS", "0", false);
+		// foveation code does not allow oversampling
+		setenv("XRT_COMPOSITOR_SCALE_PERCENTAGE", "100", true);
 
 		// FIXME: synchronization fails on gfx pipeline
 		setenv("XRT_COMPOSITOR_COMPUTE", "1", true);
 
 		setenv("AMD_DEBUG", "lowlatencyenc", false);
 
+		ipc_server_main_info server_info{
+		        .udgci = {
+		                .window_title = "WiVRn",
+#if WIVRN_FEATURE_DEBUG_GUI
+		                .open = config.debug_gui ? U_DEBUG_GUI_OPEN_ALWAYS : U_DEBUG_GUI_OPEN_AUTO,
+#else
+		                .open = U_DEBUG_GUI_OPEN_NEVER,
+#endif
+		        },
+		};
+
 		try
 		{
-			exit(ipc_server_main(0, 0 /*argc, argv*/));
+			exit(ipc_server_main(0, 0, &server_info /*argc, argv, ismi*/));
 		}
 		catch (std::exception & e)
 		{
@@ -472,8 +479,15 @@ gboolean headset_connected_success(void *)
 
 	expose_known_keys_on_dbus();
 
-	start_server();
-	start_app();
+	start_server(configuration());
+	try
+	{
+		start_app();
+	}
+	catch (std::exception & e)
+	{
+		std::cerr << "Failed to start application: " << e.what();
+	}
 
 	delay_next_try = default_delay_next_try;
 
@@ -841,9 +855,15 @@ void on_name_acquired(GDBusConnection * connection, const gchar * name, gpointer
 
 	on_headset_info_packet({});
 
-	std::ifstream file(configuration::get_config_file());
-	std::string config{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
-
+	std::string config;
+	try
+	{
+		config = configuration::read_configuration().dump();
+	}
+	catch (std::exception & e)
+	{
+		std::cerr << "Invalid configuration: " << e.what() << std::endl;
+	}
 	wivrn_server_set_json_configuration(dbus_server, config.c_str());
 
 	expose_known_keys_on_dbus();
@@ -1021,11 +1041,11 @@ int main(int argc, char * argv[])
 	if (*no_publish)
 		publication = wivrn::service_publication::none;
 	else
-		publication = configuration::read_user_configuration().publication;
+		publication = configuration().publication;
 
 #if WIVRN_USE_SYSTEMD
 	if (*app_flag)
-		return exec_application(configuration::read_user_configuration());
+		return exec_application(configuration());
 #endif
 	try
 	{

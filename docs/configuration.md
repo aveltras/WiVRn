@@ -1,6 +1,12 @@
 # Configurable items
 
-Configuration is done on server side, in `$XDG_CONFIG_HOME/wivrn/config.json` or if `$XDG_CONFIG_HOME` is not set, `$HOME/.config/wivrn/config.json`.
+Configuration is done on server side.
+Files are read from
+- `/usr/share/wivrn/config.json` (where `/usr` is selected at configure time with `CMAKE_INSTALL_PREFIX`)
+- `/etc/wivrn/config.json`
+- `$XDG_CONFIG_HOME/wivrn/config.json` or if `$XDG_CONFIG_HOME` is not set, `$HOME/.config/wivrn/config.json`.
+
+Files later in the list replace top-level values from previous ones.
 
 All elements are optional and have default values.
 
@@ -190,3 +196,17 @@ Provides the path to the directory of an OpenVR compatibility tool (such as Open
 If unset, WiVRn will autodetect the path of such a tool as usual (see [the SteamVR guide](./steamvr.md)).
 
 If set to an null, WiVRn will not manage the OpenVR configuration.
+
+## `debug-gui`
+Default value: `false`
+
+Only available when built with `WIVRN_FEATURE_DEBUG_GUI`.
+
+Enables the Monado debug gui.
+
+## `use-steamvr-lh`
+Default value: `false`
+
+Only available when built with `WIVRN_FEATURE_STEAMVR_LIGHTHOUSE`
+
+Enables the driver to load SteamVR Lighthouse devices.
